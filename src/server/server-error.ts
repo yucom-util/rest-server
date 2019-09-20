@@ -1,4 +1,4 @@
-import { code, AppError } from '@yucom/common';
+import { code as Code, AppError } from '@yucom/common';
 
 const statusCodes = {
     badRequest: 400,
@@ -42,16 +42,22 @@ const statusCodes = {
 
 
 const _codes = {};
-Object.keys(statusCodes).forEach(key => _codes[key] = {});
-type Codes = { [key in keyof typeof  statusCodes]: {} };
+Object.keys(statusCodes).forEach(key => _codes[key] = { });
+type Codes = { [key in keyof typeof statusCodes]: { } };
 
-const Codes = code.complete(<Codes> _codes);
+const Codes = Code.complete(<Codes> _codes);
 
 const ServerError = {
  ...Codes,
- statusOf: (err: AppError) => {
+ statusOf(err: AppError) {
     const validStatus = Object.keys(statusCodes).filter(name => err.code.startsWith(name));
     return validStatus.length > 0 ? statusCodes[validStatus[0]] : statusCodes.internalServerError;
+ },
+ forStatusCode(code: number) {
+  const codeName = Object.entries(statusCodes)
+        .filter(entry => entry[1] === code)
+        .map(entry => entry[0])[0];
+  return this[codeName];
  }
 };
 

@@ -1,7 +1,10 @@
 import { StartServer} from '../src/server/server';
 import { ServerError } from '../src/server/server-error';
 import { connect, ErrorCodes } from '@yucom/rest-client';
-import Log from '@yucom/log';
+import http from 'http';
+import log from '@yucom/log';
+log.setLevel('none');
+
 
 function moment() {
     return new Promise(function(resolve) {
@@ -87,6 +90,26 @@ describe('Integration', () => {
             const phone = await client.create.people[expectedId].phones.mobile({ number: '12345678' });
             expect(phone.id).toBe('mobile');
             expect(phone.number).toBe('12345678');
+        });
+
+        it('Invalid JSON => 400', async done => {
+          const data = '{hello:"world"}';
+          const options = {
+            hostname: 'localhost',
+            port: 7000,
+            path: '/people',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': data.length
+            }
+          };
+          const req = http.request(options, res => {
+            expect(res.statusCode).toBe(400);
+            done();
+          });
+          req.write(data);
+          req.end();
         });
 
         it('Not found', async done => {

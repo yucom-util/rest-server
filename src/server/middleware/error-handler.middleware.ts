@@ -19,7 +19,9 @@ const isAppError = (err: any): err is ApplicationError => {
 };
 
 function handlerCommonError(err: Error): AppError {
-    return ServerError.internalServerError.new(undefined, err);
+  const status = (<{ status: number } & Error> err).status;
+  const serverError = ServerError.forStatusCode(status) || ServerError.internalServerError;
+  return serverError.new(undefined, err);
 }
 
 function handlerUnknowObject(obj: any): AppError {
