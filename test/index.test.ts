@@ -1,7 +1,9 @@
-import { StartServer,  $id, ServerError } from '../src';
+import { CreateServer,  $id } from '../src';
 
-it ('StartServer', async function() {
-  let start = StartServer();
-  start.get.people[$id](id => ({ id }));
-  start.onListening(() => start.close());
+it ('CreateServer', async function() {
+  let app = CreateServer();
+  app.get.people[$id](id => ({ id }));
+  app.listen();
+  await app.ready();
+  await app.close();
 });

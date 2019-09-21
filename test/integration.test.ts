@@ -1,4 +1,4 @@
-import { StartServer} from '../src/server/server';
+import { CreateServer } from '../src/server/server';
 import { ServerError } from '../src/server/server-error';
 import { connect, ErrorCodes } from '@yucom/rest-client';
 import http from 'http';
@@ -14,20 +14,27 @@ function moment() {
 
 
 const people: any[] = [];
-const app = StartServer(7000);
+const app = CreateServer();
 
 const client = connect('http://localhost:7000');
 
-describe('Integration', () => {
-    beforeAll(() => {
+let lastCall: any = undefined;
 
-        app.create.people(async (person: any) => {
+describe('Integration', () => {
+    beforeAll(done => {
+
+      app.intercept.people(function(next) {
+        lastCall = this;
+        next();
+      });
+
+      app.create.people(async (person: any) => {
             person.id = people.length;
             people.push(person);
             await moment();
             return person;
         });
-        app.create.people.$id.phones.$type(async (phone: any, id, type) => {
+      app.create.people.$id.phones.$type(async (phone: any, id, type) => {
             const person = people[Number.parseInt(id, 10)];
             if (!person.phones) person.phones = {};
             person.phones[type] = phone;
@@ -35,18 +42,18 @@ describe('Integration', () => {
             await moment();
             return phone;
         });
-        app.create.invalid(async () => {
+      app.create.invalid(async () => {
             await moment();
             throw ServerError.badRequest.new({ hello: 'world'});
         });
 
-        app.get.people.$id(async (personId: string) => {
+      app.get.people.$id(async (personId: string) => {
             const id = Number.parseInt(personId, 10);
             if (!people[id]) throw ServerError.notFound.new({ personId });
             await moment();
             return people[id];
         });
-        app.get.people.$person_id.phones.$type(async (personId: string, phoneId: string) => {
+      app.get.people.$person_id.phones.$type(async (personId: string, phoneId: string) => {
             const id = Number.parseInt(personId, 10);
             if (!people[id]) throw ServerError.notFound.new({ personId });
             if (!people[id].phones || !people[id].phones[phoneId]) throw ServerError.notFound.new({ personId, phoneId });
@@ -54,33 +61,51 @@ describe('Integration', () => {
             return people[id].phones[phoneId];
         });
 
-        app.invoke.sum(async (data: {a: number, b: number}) => {
+      app.invoke.sum(async (data: {a: number, b: number}) => {
             await moment();
             return data.a + data.b;
         });
-        app.invoke.err(async (data: {a: number, b: number}) => {
+      app.invoke.err(async (data: {a: number, b: number}) => {
             await moment();
             throw new Error('Some error');
         });
 
-        app.list.people(async function() {
+      app.list.people(async function() {
             await moment();
             if (this.args.sort && this.args.sort !== 'name') throw Error();
             return people;
         });
 
-        app.remove.people.$id(async function(id) {
+      app.remove.people.$id(async function(id) {
             await moment();
             const pid = Number.parseInt(id, 10);
             people.splice(pid, 1);
         });
+
+      app.update.people.$id(async (data: object, personId: string) => {
+          const id = Number.parseInt(personId, 10);
+          if (!people[id]) throw ServerError.notFound.new({ personId });
+          await moment();
+          Object.assign(people[id], data);
+          return people[id];
+        });
+
+      app.replace.people.$id(async (data: object, personId: string) => {
+          const id = Number.parseInt(personId, 10);
+          if (!people[id]) throw ServerError.notFound.new({ personId });
+          await moment();
+          const person = Object.assign({}, data, { id });
+          people[id] = person;
+          return person;
+        });
+
+      app.listen(7000).then(done);
     });
 
     describe('Create', () => {
 
-        it('Success', async () => {
+        it('Success', async done => {
             const expectedId = people.length;
-
             const john = await client.create.people({ name: 'John', lastname: 'Connor' });
 
             expect(john.id).toBe(expectedId);
@@ -90,6 +115,7 @@ describe('Integration', () => {
             const phone = await client.create.people[expectedId].phones.mobile({ number: '12345678' });
             expect(phone.id).toBe('mobile');
             expect(phone.number).toBe('12345678');
+            done();
         });
 
         it('Invalid JSON => 400', async done => {
@@ -205,10 +231,56 @@ describe('Integration', () => {
 
             await client.remove.people(john2.id);
 
-            expect((await client.list.people()).length).toBe(count - 1);
+            expect(await client.list.people()).toHaveLength(count - 1);
         });
 
     });
 
-    afterAll(() => app.close() );
+    describe('Update', () => {
+
+      it('Success', async function() {
+        const johannes = await client.create.people({ name: 'Johannes', lastname: 'Churchill' });
+
+        expect(johannes.name).toBe('Johannes');
+        expect(johannes.lastname).toBe('Churchill');
+        expect(johannes.age).toBeUndefined();
+
+        const winston = await client.update.people[johannes.id]({ name: 'Winston', age: 90 });
+
+        expect(winston.name).toBe('Winston');
+        expect(winston.lastname).toBe('Churchill');
+        expect(winston.age).toBe(90);
+      });
+
+    });
+
+    describe('Replace', () => {
+
+      it('Success', async function() {
+        const johannes = await client.create.people({ name: 'Johannes', lastname: 'Churchill' });
+
+        expect(johannes.name).toBe('Johannes');
+        expect(johannes.lastname).toBe('Churchill');
+        expect(johannes.age).toBeUndefined();
+
+        const winston = await client.replace.people[johannes.id]({ name: 'Winston', age: 90 });
+
+        expect(winston.name).toBe('Winston');
+        expect(winston.lastname).toBeUndefined();
+        expect(winston.age).toBe(90);
+      });
+
+    });
+
+    describe('Intercept', () => {
+
+      it('Success', async function() {
+        await client.list.people({ type: 'pretty', age: 25 });
+        expect(lastCall.args.type).toBe('pretty');
+        expect(lastCall.args.age).toBe('25');
+      });
+
+    });
+
+    afterAll(() => app.close());
 });

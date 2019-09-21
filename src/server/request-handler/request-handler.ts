@@ -47,26 +47,30 @@ class RequestHandler {
     public invoke: PathHandler<InvokeHandler>;
     public intercept: PathHandler<InterceptHandler>;
 
-    constructor(readonly server: Server, private router: ExpressRouter, private pathsRecord: any) {
-        this.list = this.initPathHanlder((paths: string[], listHandler: ListHandler) =>
+    private readyPromise: Promise<void> = undefined;
+    private server: Server = undefined;
+
+    constructor(readonly express: Express.Express, private router: ExpressRouter, private pathsRecord: any) {
+
+      this.list = this.initPathHanlder((paths: string[], listHandler: ListHandler) =>
                 this.registerHandler(
                         'get',
                         paths,
                         200,
-                        async function(body: object, ...params: string[]) {
+                        async function(_, ...params: string[]) {
                             return await listHandler.call(this, ...params);
                         }));
 
-        this.get = this.initPathHanlder((paths: string[], getHandler: GetHandler) =>
+      this.get = this.initPathHanlder((paths: string[], getHandler: GetHandler) =>
                 this.registerHandler(
                         'get',
                         paths,
                         200,
-                        async function(body: object, ...params: string[]) {
+                        async function(_, ...params: string[]) {
                             return await getHandler.call(this, ...params);
                         }));
 
-        this.create = this.initPathHanlder((paths: string[], createHandler: CreateHandler) =>
+      this.create = this.initPathHanlder((paths: string[], createHandler: CreateHandler) =>
                 this.registerHandler(
                         'post',
                         paths,
@@ -75,7 +79,7 @@ class RequestHandler {
                             return await createHandler.call(this, body, ...params);
                         }));
 
-        this.replace = this.initPathHanlder((paths: string[], replaceHandler: ReplaceHandler) =>
+      this.replace = this.initPathHanlder((paths: string[], replaceHandler: ReplaceHandler) =>
                 this.registerHandler(
                         'put',
                         paths,
@@ -84,16 +88,16 @@ class RequestHandler {
                             return await replaceHandler.call(this, body, ...params);
                         }));
 
-        this.remove = this.initPathHanlder((paths: string[], removeHandler: RemoveHandler) =>
+      this.remove = this.initPathHanlder((paths: string[], removeHandler: RemoveHandler) =>
                 this.registerHandler(
                         'delete',
                         paths,
                         204,
-                        async function(body: object, ...params: string[]) {
+                        async function(_, ...params: string[]) {
                             return await removeHandler.call(this, ...params);
                         }));
 
-        this.update = this.initPathHanlder((paths: string[], updateHandler: UpdateHandler) =>
+      this.update = this.initPathHanlder((paths: string[], updateHandler: UpdateHandler) =>
                 this.registerHandler(
                         'patch',
                         paths,
@@ -102,8 +106,8 @@ class RequestHandler {
                             return await updateHandler.call(this, body, ...params);
                         }));
 
-        this.invoke = this.initPathHanlder((paths: string[], invokeHandler: InvokeHandler) =>
-                this.registerHandler(
+      this.invoke = this.initPathHanlder((paths: string[], invokeHandler: InvokeHandler) =>
+                 this.registerHandler(
                         'post',
                         paths,
                         200,
@@ -111,21 +115,34 @@ class RequestHandler {
                             return await invokeHandler.call(this, body, ...params);
                         }));
 
-        this.intercept = this.initPathHanlder((paths: string[], interceptHandler: InterceptHandler) =>
+      this.intercept = this.initPathHanlder((paths: string[], interceptHandler: InterceptHandler) =>
                 this.registerInterceptor(
                         'use',
                         paths,
                         async function(next: NextFunction) {
-                            interceptHandler.call(this, next);
+                          interceptHandler.call(this, next);
                         }));
     }
 
-    onListening(callback: () => void) {
-        this.server.on('listening', callback);
+    ready() {
+      return this.readyPromise || Promise.reject(new Error('Server not started. Use listen.'));
     }
 
-    close(callback?: (err?: Error) => void) {
-        this.server.close(callback);
+    close() {
+      return new Promise<void>((resolve, reject) => {
+        this.server.close((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    }
+
+    listen(port: number = 7000) {
+      if (this.server) return Promise.reject(new Error('Cannot restart a server. Not supported.'));
+      this.readyPromise = new Promise(resolve => {
+        this.server = this.express.listen(port, resolve);
+      });
+      return this.readyPromise;
     }
 
     private getExpressPath = (paths: string[]) => paths.map((p, idx) => p.startsWith('$') ? ':var' + idx : p);
@@ -174,9 +191,9 @@ class RequestHandler {
         const expressPath = this.getPath(paths);
         serverLog.debug(`Inteceptor("${expressPath}")`);
 
-        this.router[method](expressPath, (req: Request, res: Response, next: NextFunction) =>
-                handler.call(this.getContext(req, res), next).catch(next)
-        );
+        this.router[method](expressPath, (req: Request, res: Response, next: NextFunction) => {
+          return handler.call(this.getContext(req, res), next).catch(next)
+        });
     }
 }
 
