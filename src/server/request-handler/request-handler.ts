@@ -191,9 +191,9 @@ class RequestHandler {
         const expressPath = this.getPath(paths);
         serverLog.debug(`Inteceptor("${expressPath}")`);
 
-        this.router[method](expressPath, (req: Request, res: Response, next: NextFunction) => {
-          return handler.call(this.getContext(req, res), next).catch(next)
-        });
+        this.router[method](expressPath, (req: Request, res: Response, next: NextFunction) =>
+          handler.call(this.getContext(req, res), next).catch(next)
+        );
     }
 }
 

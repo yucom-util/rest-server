@@ -1,6 +1,6 @@
 {
   "name": "@yucom/rest-server",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "description": "Preconfigured rest-server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

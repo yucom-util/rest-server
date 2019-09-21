@@ -1,2 +1,3 @@
-# node-logger
-Preconfigured logger
+# Yucom Rest Server
+
+See `test/integrations.tests.ts` for reference.
