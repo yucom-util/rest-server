@@ -34,6 +34,7 @@ describe('Integration', () => {
             await moment();
             return person;
         });
+
       app.create.people.$id.phones.$type(async (phone: any, id, type) => {
             const person = people[Number.parseInt(id, 10)];
             if (!person.phones) person.phones = {};
@@ -46,7 +47,6 @@ describe('Integration', () => {
             await moment();
             throw ServerError.badRequest.new({ hello: 'world'});
         });
-
       app.get.people.$id(async (personId: string) => {
             const id = Number.parseInt(personId, 10);
             if (!people[id]) throw ServerError.notFound.new({ personId });
@@ -98,6 +98,9 @@ describe('Integration', () => {
           people[id] = person;
           return person;
         });
+
+      // Fixed response
+      app.list.pets(['dog', 'cat'])
 
       app.listen(7000).then(done);
     });

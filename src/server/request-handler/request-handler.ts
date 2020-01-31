@@ -10,7 +10,7 @@ type Response = Express.Response;
 type NextFunction = Express.NextFunction;
 type ExpressRouter = Express.Router;
 
-type ListHandler = (...params: string[]) => Promise<any[]> | any[];
+type ListHandler = (...params: string[]) => (Promise<any[]> | any[]);
 type GetHandler = (...params: string[]) => any;
 type RemoveHandler = (...params: string[]) => any;
 type CreateHandler = (body: object, ...params: string[]) => any;
@@ -20,7 +20,7 @@ type InvokeHandler = (body: object, ...params: string[]) => any;
 type InterceptHandler = (next: NextFunction) => any;
 type OperationHandler = ListHandler | GetHandler | RemoveHandler | CreateHandler | UpdateHandler | InvokeHandler | InterceptHandler;
 type InternalHandler = (body: object, ...params: string[]) => object;
-type validOperation = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'use' ;
+type validOperation = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'use' | 'static';
 
 type RequestContext = {
     request: Request;
@@ -30,15 +30,25 @@ type RequestContext = {
     cookies: any;
 };
 
-type HandlerRegister<T extends OperationHandler> = (paths: string[], handler: T) => any;
+type HandlerRegister<T extends OperationHandler> = (paths: string[], handler: T | ReturnType<T>) => any;
 
 interface PathHandler<T extends OperationHandler> extends ProxyTargetType {
     [key: string]: PathHandler<T>;
     (handler: T): void;
 }
 
+type ResponseResolver<T extends OperationHandler> = PathHandler<T extends OperationHandler> | ReturnType<T>
+
+function asHandler<T extends OperationHandler>(handler: T | ReturnType<T>): OperationHandler {
+  if (typeof(handler) === 'function') {
+    return handler
+  } else {
+    return () => handler
+  }
+}
+
 class RequestHandler {
-    public list: PathHandler<ListHandler>;
+    public list: PathHandler<ListHandler | ReturnType<ListHandler>;
     public get: PathHandler<GetHandler>;
     public create: PathHandler<CreateHandler>;
     public replace: PathHandler<ReplaceHandler>;
@@ -46,82 +56,98 @@ class RequestHandler {
     public remove: PathHandler<RemoveHandler>;
     public invoke: PathHandler<InvokeHandler>;
     public intercept: PathHandler<InterceptHandler>;
+    public static: PathHandler<() => string>;
 
     private readyPromise: Promise<void> = undefined;
     private server: Server = undefined;
 
     constructor(readonly express: Express.Express, private router: ExpressRouter, private pathsRecord: any) {
 
-      this.list = this.initPathHanlder((paths: string[], listHandler: ListHandler) =>
-                this.registerHandler(
-                        'get',
-                        paths,
-                        200,
-                        async function(_, ...params: string[]) {
-                            return await listHandler.call(this, ...params);
-                        }));
+      this.list = this.initPathHanlder((paths: string[], response: ListHandler | any[]) => {
+        let handler = asHandler(response)
+        this.registerHandler(
+                'get',
+                paths,
+                200,
+                async function(_, ...params: string[]) {
+                    return await handler.call(this, ...params);
+                })
+        }
+      );
 
-      this.get = this.initPathHanlder((paths: string[], getHandler: GetHandler) =>
-                this.registerHandler(
-                        'get',
-                        paths,
-                        200,
-                        async function(_, ...params: string[]) {
-                            return await getHandler.call(this, ...params);
-                        }));
+      this.get = this.initPathHanlder((paths: string[], response: GetHandler | any) => {
+        let handler = asHandler(response)
+        this.registerHandler(
+                'get',
+                paths,
+                200,
+                async function(_, ...params: string[]) {
+                    return await handler.call(this, ...params);
+                })
+      });
 
-      this.create = this.initPathHanlder((paths: string[], createHandler: CreateHandler) =>
-                this.registerHandler(
-                        'post',
-                        paths,
-                        201,
-                        async function(body: object, ...params: string[]) {
-                            return await createHandler.call(this, body, ...params);
-                        }));
+      this.create = this.initPathHanlder((paths: string[], response: CreateHandler | any) =>{
+        let handler = asHandler(response)
+        this.registerHandler(
+                'post',
+                paths,
+                201,
+                async function(body: object, ...params: string[]) {
+                    return await handler.call(this, body, ...params);
+                })
+      });
 
-      this.replace = this.initPathHanlder((paths: string[], replaceHandler: ReplaceHandler) =>
-                this.registerHandler(
-                        'put',
-                        paths,
-                        201,
-                        async function(body: object, ...params: string[]) {
-                            return await replaceHandler.call(this, body, ...params);
-                        }));
+      this.replace = this.initPathHanlder((paths: string[], response: ReplaceHandler | any) => {
+        let handler = asHandler(response)
+        this.registerHandler(
+                'put',
+                paths,
+                201,
+                async function(body: object, ...params: string[]) {
+                    return await handler.call(this, body, ...params);
+                })
+      });
 
-      this.remove = this.initPathHanlder((paths: string[], removeHandler: RemoveHandler) =>
-                this.registerHandler(
-                        'delete',
-                        paths,
-                        204,
-                        async function(_, ...params: string[]) {
-                            return await removeHandler.call(this, ...params);
-                        }));
+      this.remove = this.initPathHanlder((paths: string[], response: RemoveHandler | any) => {
+        let handler = asHandler(response)
+        this.registerHandler(
+                'delete',
+                paths,
+                204,
+                async function(_, ...params: string[]) {
+                    return await handler.call(this, ...params);
+                })
+      });
 
-      this.update = this.initPathHanlder((paths: string[], updateHandler: UpdateHandler) =>
-                this.registerHandler(
-                        'patch',
-                        paths,
-                        201,
-                        async function(body: object, ...params: string[]) {
-                            return await updateHandler.call(this, body, ...params);
-                        }));
+      this.update = this.initPathHanlder((paths: string[], response: UpdateHandler | any) =>{
+        let handler = asHandler(response)
+        this.registerHandler(
+                'patch',
+                paths,
+                201,
+                async function(body: object, ...params: string[]) {
+                    return await handler.call(this, body, ...params);
+                })
+      });
 
-      this.invoke = this.initPathHanlder((paths: string[], invokeHandler: InvokeHandler) =>
-                 this.registerHandler(
-                        'post',
-                        paths,
-                        200,
-                        async function(body: object, ...params: string[]) {
-                            return await invokeHandler.call(this, body, ...params);
-                        }));
+      this.invoke = this.initPathHanlder((paths: string[], response: InvokeHandler | any) =>{
+        let handler = asHandler(response)
+        this.registerHandler(
+              'post',
+              paths,
+              200,
+              async function(body: object, ...params: string[]) {
+                  return await handler.call(this, body, ...params);
+              })
+      });
 
-      this.intercept = this.initPathHanlder((paths: string[], interceptHandler: InterceptHandler) =>
-                this.registerInterceptor(
-                        'use',
-                        paths,
-                        async function(next: NextFunction) {
-                          interceptHandler.call(this, next);
-                        }));
+      this.intercept = this.initPathHanlder((paths: string[], handler: InterceptHandler) =>
+        this.registerInterceptor(
+              'use',
+              paths,
+              async function(next: NextFunction) {
+                handler.call(this, next);
+              }));
     }
 
     ready() {
