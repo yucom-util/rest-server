@@ -20,7 +20,7 @@ type InvokeHandler = (body: object, ...params: string[]) => any;
 type InterceptHandler = (next: NextFunction) => any;
 type OperationHandler = ListHandler | GetHandler | RemoveHandler | CreateHandler | UpdateHandler | InvokeHandler | InterceptHandler;
 type InternalHandler = (body: object, ...params: string[]) => object;
-type validOperation = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'use' | 'static';
+type validOperation = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'use';
 
 type RequestContext = {
     request: Request;
@@ -34,21 +34,19 @@ type HandlerRegister<T extends OperationHandler> = (paths: string[], handler: T 
 
 interface PathHandler<T extends OperationHandler> extends ProxyTargetType {
     [key: string]: PathHandler<T>;
-    (handler: T): void;
+    (handler: T | ReturnType<T>): void;
 }
 
-type ResponseResolver<T extends OperationHandler> = PathHandler<T extends OperationHandler> | ReturnType<T>
-
-function asHandler<T extends OperationHandler>(handler: T | ReturnType<T>): OperationHandler {
+function asHandler<T extends OperationHandler>(handler: T | ReturnType<T>): T {
   if (typeof(handler) === 'function') {
     return handler
   } else {
-    return () => handler
+    return <T>(() => handler)
   }
 }
 
 class RequestHandler {
-    public list: PathHandler<ListHandler | ReturnType<ListHandler>;
+    public list: PathHandler<ListHandler>;
     public get: PathHandler<GetHandler>;
     public create: PathHandler<CreateHandler>;
     public replace: PathHandler<ReplaceHandler>;
@@ -64,7 +62,7 @@ class RequestHandler {
     constructor(readonly express: Express.Express, private router: ExpressRouter, private pathsRecord: any) {
 
       this.list = this.initPathHanlder((paths: string[], response: ListHandler | any[]) => {
-        let handler = asHandler(response)
+        let handler = asHandler<ListHandler>(response)
         this.registerHandler(
                 'get',
                 paths,
@@ -148,6 +146,16 @@ class RequestHandler {
               async function(next: NextFunction) {
                 handler.call(this, next);
               }));
+
+      this.static = this.initPathHanlder((paths: string[], rootFolder: string) => {
+        const expressPath = this.getPath(paths);
+        serverLog.debug(`Static("${expressPath}")`);
+
+        router.use(
+          expressPath,
+          Express.static(rootFolder, { fallthrough: false, extensions: ['html', 'htm'] })
+        );
+      });
     }
 
     ready() {
@@ -182,18 +190,18 @@ class RequestHandler {
         , headers: req.headers
         , cookies: req.cookies
     }
-    private initPathHanlder = <T extends OperationHandler>(onExecute: HandlerRegister<T>) =>
-            ProxyPathHandler.create<PathHandler<T>, HandlerRegister<T>>([], onExecute)
+    private initPathHanlder = <T extends OperationHandler>(onExecute: Function) =>
+            ProxyPathHandler.create<PathHandler<T>>([], onExecute)
 
     private recordPath(path: string, method: validOperation) {
         serverLog.debug(`Handler(${method.toUpperCase()}, "${path}")`);
         this.pathsRecord[path] = this.pathsRecord[path] === undefined ? [] : this.pathsRecord[path];
         this.pathsRecord[path].push(method);
     }
-    private registerHandler = ( method: validOperation,
-                                paths: string[],
-                                successfulStatus: number,
-                                handler: InternalHandler) => {
+    private registerHandler(method: validOperation,
+                            paths: string[],
+                            successfulStatus: number,
+                            handler: InternalHandler) {
         const expressPath = this.getPath(paths);
         const params = this.getParams(paths);
         this.recordPath(expressPath, method);
@@ -211,14 +219,24 @@ class RequestHandler {
         });
     }
 
-    private registerInterceptor = ( method: validOperation,
-                                    paths: string[],
-                                    handler: InterceptHandler) => {
+    private registerInterceptor(method: validOperation,
+                                paths: string[],
+                                handler: InterceptHandler) {
         const expressPath = this.getPath(paths);
         serverLog.debug(`Inteceptor("${expressPath}")`);
 
         this.router[method](expressPath, (req: Request, res: Response, next: NextFunction) =>
           handler.call(this.getContext(req, res), next).catch(next)
+        );
+    }
+
+    private registerStatic(paths: string[], localPath: string) {
+        const expressPath = this.getPath(paths);
+        serverLog.debug(`Static("${expressPath}")`);
+
+        this.router.use(
+          expressPath,
+          Express.static(localPath, { fallthrough: false, extensions: ['html', 'htm'] })
         );
     }
 }

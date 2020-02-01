@@ -99,8 +99,9 @@ describe('Integration', () => {
           return person;
         });
 
-      // Fixed response
-      app.list.pets(['dog', 'cat'])
+      // fixed response
+      app.list.pets(['dog', 'cat']);
+      app.update.pets['123']({name: 'Bobby'});
 
       app.listen(7000).then(done);
     });
@@ -173,7 +174,7 @@ describe('Integration', () => {
             expect(john.name).toBe('John');
             expect(john.lastname).toBe('Connor');
 
-            const phone = await client.get.people[0].phones['mobile']();
+            const phone = await client.get.people[0].phones.mobile();
 
             expect(phone.id).toBe('mobile');
             expect(phone.number).toBe('12345678');
@@ -222,6 +223,15 @@ describe('Integration', () => {
             expect(list.length).toBe(1);
         });
 
+        it('Success Fixed', async function() {
+
+            const list = await client.list.pets({ sort: 'name' });
+
+            expect(list.length).toBe(2);
+            expect(list[0]).toBe('dog');
+            expect(list[1]).toBe('cat');
+        });
+
     });
 
     describe('Remove', () => {
@@ -254,6 +264,12 @@ describe('Integration', () => {
         expect(winston.lastname).toBe('Churchill');
         expect(winston.age).toBe(90);
       });
+
+      it('Success Fixed', async function() {
+        const pet = await client.update.pets['123']({ name: 'Winston' });
+
+        expect(pet.name).toBe('Bobby');
+       });
 
     });
 
