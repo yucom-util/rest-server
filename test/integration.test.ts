@@ -301,5 +301,77 @@ describe('Integration', () => {
 
     });
 
+    describe('CORS', () => {
+
+      it('CORS allows all origins by default', async done => {
+        const appCors = CreateServer();
+        appCors.get.people(() => ['John', 'Jean']);
+        await appCors.listen(7001);
+
+        const options = {
+          hostname: 'localhost',
+          port: 7001,
+          path: '/people',
+          method: 'OPTIONS',
+          headers: {
+            origin: 'https://google.com'
+          }
+        };
+        const req = http.request(options, res => {
+          appCors.close();
+          expect(res.headers['access-control-allow-origin']).toBe('*');
+          expect(res.statusCode).toBe(200);
+          done();
+        });
+        req.end();
+      });
+
+      it('CORS allows all origins', async done => {
+        const appCors = CreateServer({corsAllowedOrigins: /l/});
+        appCors.get.people(() => ['John', 'Jean']);
+        await appCors.listen(7001);
+
+        const options = {
+          hostname: 'localhost',
+          port: 7001,
+          path: '/people',
+          method: 'OPTIONS',
+          headers: {
+            origin: 'https://google.com'
+          }
+        };
+        const req = http.request(options, res => {
+          appCors.close();
+          expect(res.headers['access-control-allow-origin']).toBe('https://google.com');
+          expect(res.statusCode).toBe(200);
+          done();
+        });
+        req.end();
+      });
+
+      it('CORS restriction with regex rejects invalid origin', async done => {
+        const appCors = CreateServer({corsAllowedOrigins: /hello/});
+        appCors.get.people(() => ['John', 'Jean']);
+        await appCors.listen(7001);
+
+        const options = {
+          hostname: 'localhost',
+          port: 7001,
+          path: '/people',
+          method: 'OPTIONS',
+          headers: {
+            origin: 'https://google.com'
+          }
+        };
+        const req = http.request(options, res => {
+          appCors.close();
+          expect(res.headers['access-control-allow-origin']).toBe(undefined);
+          expect(res.statusCode).toBe(200);
+          done();
+        });
+        req.end();
+      });
+    });
+
     afterAll(() => app.close());
 });

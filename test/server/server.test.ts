@@ -2,7 +2,6 @@ jest.mock('express');
 
 import { CreateServer } from '../../src/server/server';
 import Express from 'express';
-import { doesNotReject } from 'assert';
 
 const ExpressMock: any = Express;
 let ExpressAppMock = undefined;
@@ -17,13 +16,13 @@ beforeEach(() => {
 
 test('start server without config', () => {
     CreateServer().listen();
-    expect(ExpressAppMock.use).toBeCalledTimes(8);
+    expect(ExpressAppMock.use).toBeCalledTimes(9);
     expect(ExpressAppMock.listen).toBeCalledTimes(1);
 });
 
 test('start server with port', () => {
     CreateServer().listen(10000);
-    expect(ExpressAppMock.use).toBeCalledTimes(8);
+    expect(ExpressAppMock.use).toBeCalledTimes(9);
     expect(ExpressAppMock.listen).toBeCalledTimes(1);
 });
 

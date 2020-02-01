@@ -229,16 +229,6 @@ class RequestHandler {
           handler.call(this.getContext(req, res), next).catch(next)
         );
     }
-
-    private registerStatic(paths: string[], localPath: string) {
-        const expressPath = this.getPath(paths);
-        serverLog.debug(`Static("${expressPath}")`);
-
-        this.router.use(
-          expressPath,
-          Express.static(localPath, { fallthrough: false, extensions: ['html', 'htm'] })
-        );
-    }
 }
 
 export {
